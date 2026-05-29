@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>爆火视频文案生产器</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css" />
+    <style>
+      :root {
+        --bg-primary: #000000;
+        --bg-secondary: rgba(255, 255, 255, 0.06);
+        --bg-tertiary: rgba(255, 255, 255, 0.1);
+        --text-primary: #f5f5f7;
+        --text-secondary: rgba(255, 255, 255, 0.65);
+        --text-tertiary: rgba(255, 255, 255, 0.4);
+        --border-primary: rgba(255, 255, 255, 0.12);
+        --border-secondary: rgba(255, 255, 255, 0.08);
+        --accent: #007aff;
+        --accent-hover: #0066d9;
+        --accent-green: #30d158;
+        --accent-orange: #ff9f0a;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+
+        /* 兼容旧 CSS 变量引用 */
+        --color-background-primary: var(--bg-primary);
+        --color-background-secondary: var(--bg-secondary);
+        --color-text-primary: var(--text-primary);
+        --color-text-secondary: var(--text-secondary);
+        --color-text-tertiary: var(--text-tertiary);
+        --color-border-tertiary: var(--border-primary);
+        --color-border-secondary: var(--border-secondary);
+        --border-radius-md: var(--radius-md);
+        --border-radius-lg: var(--radius-lg);
+        --font-sans: -apple-assistant, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+        --font-mono: 'SF Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: -apple-assistant, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        display: flex;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      #app {
+        width: 100%;
+        max-width: 680px;
+        padding: 0 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
