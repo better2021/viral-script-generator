@@ -69,7 +69,7 @@
 
     <!-- Canvas 扩散区：全宽 -->
     <div class="canvas-area" ref="canvasAreaRef">
-      <canvas ref="canvasRef" class="main-canvas" @click="handleCanvasClick"></canvas>
+      <canvas ref="canvasRef" class="main-canvas" @click="handleCanvasClick" @mousemove="handleCanvasMouseMove" @mouseleave="handleCanvasMouseLeave"></canvas>
 
       <!-- 无节点时的引导 -->
       <div class="guide" v-if="!rootNode && !isDiffusing">
@@ -77,11 +77,39 @@
         <p class="guide-text">输入关键词，点击「扩散」开始</p>
       </div>
     </div>
+
+    <!-- 名词查询弹窗 -->
+    <Transition name="fade">
+      <div v-if="showQueryModal" class="modal-overlay" @click.self="closeQueryModal">
+        <div class="modal-card">
+          <div class="modal-hd">
+            <span class="modal-title">📖 名词查询：{{ queryTerm }}</span>
+            <button class="modal-close" @click="closeQueryModal"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div class="modal-content" :class="{ streaming: isQuerying }">
+              <div v-if="isQuerying && !queryResult" class="modal-loading">
+                <div class="modal-loader"><span></span><span></span><span></span></div>
+                <span>AI 正在思考...</span>
+              </div>
+              <div v-html="queryResult"></div>
+              <span v-if="isQuerying && queryResult" class="stream-cursor">|</span>
+            </div>
+          </div>
+          <div class="modal-ft">
+            <button class="copy-btn" @click="copyQueryResult" :disabled="!queryResult || isQuerying">
+              <i class="ti ti-copy" aria-hidden="true"></i>
+              <span>{{ copied ? '已复制' : '复制全部' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 
 // ============ AI 模型配置 ============
 const AI_MODELS = [
@@ -105,6 +133,15 @@ const aiConfigured = computed(() => !!storedAiKey.value)
 
 let canvas, ctx, animId
 let W = 0, H = 0
+
+// 悬停 & 查询
+let hoveredNode = null
+let queryBtnArea = null  // { x, y, w, h }
+
+const showQueryModal = ref(false)
+const queryTerm = ref('')
+const queryResult = ref('')
+const isQuerying = ref(false)
 
 // ============ 节点数据 ============
 let nodeIdCounter = 0
@@ -303,6 +340,150 @@ JSON 格式返回（不要 markdown）：{"keywords":["词1","词2"...]}`
   return Array.isArray(parsed.keywords) ? parsed.keywords : []
 }
 
+// ============ 名词查询 ============
+/**
+ * 将 markdown 文本渲染为美观的 HTML
+ */
+function renderMarkdown(text) {
+  if (!text) return ''
+  const html = text
+    .replace(/^### (.+)/gm, '<div class="q-sec-hd">$1</div>')
+    .replace(/^## (.+)/gm, '<div class="q-sec-title">$1</div>')
+    .replace(/^# (.+)/gm, '<div class="q-sec-main">$1</div>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^(\d+)\.\s+(.+)/gm, '<div class="q-num-item"><span class="q-num">$1</span><span>$2</span></div>')
+    .replace(/^- (.+)/gm, '<div class="q-bullet-item"><span class="q-bullet">✦</span><span>$1</span></div>')
+    .replace(/\n\n/g, '</div><div class="q-block">')
+    .trim()
+  return `<div class="q-block">${html}</div>`
+}
+
+async function openQueryModal(term) {
+  queryTerm.value = term
+  showQueryModal.value = true
+  isQuerying.value = true
+  queryResult.value = ''
+
+  try {
+    const cfg = AI_MODELS.find(m => m.value === aiModel.value)
+    if (!cfg || !storedAiKey.value) throw new Error('AI 未配置')
+
+    const prompt = `用通俗易懂的方式解释「${term}」这个概念，要求结构清晰、排版美观。
+
+在每个小标题前加上合适的 emoji 表情，让段落更生动易读。
+
+### 📝 一句话概括
+用一句话说明它是什么。
+
+### 🔑 关键要点
+列出 3-5 个要点，每个要点用 **粗体** 标注关键词。
+
+### 💡 生活中的例子
+给出 1-2 个具体的例子帮助理解。
+
+### 🔗 关联概念
+列出 2-3 个与之相关的概念（仅名称，用逗号分隔）。
+
+用 markdown 格式输出，小标题用 ###，要点用 - 开头，例子用 1. 2. 编号。`
+
+    // 使用流式 SSE 请求，实现打字机效果
+    const body = {
+      model: cfg.model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.6,
+      max_tokens: 2048,
+      stream: true,
+    }
+
+    const res = await fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${storedAiKey.value}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30000),
+    })
+    if (!res.ok) throw new Error(`请求失败 (${res.status})`)
+
+    if (!res.body) {
+      // 无 body 流支持，退化为普通请求
+      const data = await res.json()
+      const content = data.choices?.[0]?.message?.content || ''
+      if (!content) throw new Error('返回为空')
+      queryResult.value = renderMarkdown(content)
+      return
+    }
+
+    // SSE 流式读取 + 打字机效果
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let fullText = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = line.slice(6).trim()
+        if (data === '[DONE]') continue
+        try {
+          const parsed = JSON.parse(data)
+          const delta = parsed.choices?.[0]?.delta?.content || ''
+          if (delta) {
+            fullText += delta
+            queryResult.value = renderMarkdown(fullText)
+          }
+        } catch { /* 跳过无法解析的中间块 */ }
+      }
+    }
+
+    // 处理缓冲区残留
+    if (buffer.startsWith('data: ')) {
+      const data = buffer.slice(6).trim()
+      if (data !== '[DONE]') {
+        try {
+          const parsed = JSON.parse(data)
+          const delta = parsed.choices?.[0]?.delta?.content || ''
+          if (delta) {
+            fullText += delta
+            queryResult.value = renderMarkdown(fullText)
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
+    if (!fullText) throw new Error('返回为空')
+    queryResult.value = renderMarkdown(fullText)
+  } catch (e) {
+    queryResult.value = `<div class="q-error"><i class="ti ti-alert-triangle"></i> 查询失败：${e.message}</div>`
+  } finally {
+    isQuerying.value = false
+  }
+}
+
+function closeQueryModal() {
+  showQueryModal.value = false
+  queryTerm.value = ''
+  queryResult.value = ''
+}
+
+const copied = ref(false)
+
+async function copyQueryResult() {
+  const div = document.createElement('div')
+  div.innerHTML = queryResult.value
+  const text = div.textContent || div.innerText || ''
+  try {
+    await navigator.clipboard.writeText(text.trim())
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  } catch { /* 静默失败 */ }
+}
+
 // ============ 重置 ============
 function resetGraph() {
   allNodes.length = 0
@@ -356,17 +537,44 @@ async function diffuse() {
   }
 }
 
-// ============ Canvas 点击处理 ============
+// ============ Canvas 点击 & 悬停 ============
+let mouseX = -1000, mouseY = -1000
+
+function handleCanvasMouseMove(e) {
+  const rect = canvas.getBoundingClientRect()
+  mouseX = e.clientX - rect.left
+  mouseY = e.clientY - rect.top
+}
+
+function handleCanvasMouseLeave() {
+  mouseX = -1000
+  mouseY = -1000
+  hoveredNode = null
+}
+
 function handleCanvasClick(e) {
   const rect = canvas.getBoundingClientRect()
   const cx = e.clientX - rect.left, cy = e.clientY - rect.top
 
-  // 反向查节点（从上层到下层）
+  // 优先检测"名词查询"按钮点击
+  if (queryBtnArea) {
+    const { x, y, w, h } = queryBtnArea
+    if (cx >= x && cx <= x + w && cy >= y && cy <= y + h) {
+      queryBtnArea = null
+      if (hoveredNode) {
+        openQueryModal(hoveredNode.keyword)
+      }
+      return
+    }
+  }
+
+  // 反向查节点
+  hoveredNode = null
+  queryBtnArea = null
   for (let i = allNodes.length - 1; i >= 0; i--) {
     const n = allNodes[i]
     const dx = cx - n.x, dy = cy - n.y
     if (dx * dx + dy * dy < (n.radius + 8) * (n.radius + 8)) {
-      // 点击节点 → 扩散
       keyword.value = n.keyword
       diffuse()
       return
@@ -500,6 +708,59 @@ function draw() {
     ctx.fillText(text, n.x, n.y)
   }
 
+  // —— 悬停检测 & 名词查询按钮 ——
+  queryBtnArea = null
+  // 带滞后的悬停检测：已有 hoveredNode 则用更大半径保持
+  let newHovered = null
+  for (let i = allNodes.length - 1; i >= 0; i--) {
+    const n = allNodes[i]
+    if (n.scale < 1) continue
+    const dx = mouseX - n.x, dy = mouseY - n.y
+    const hitR = hoveredNode && hoveredNode.id === n.id ? n.radius + 30 : n.radius + 8
+    if (dx * dx + dy * dy < hitR * hitR) {
+      newHovered = n
+      break
+    }
+  }
+  // 如果鼠标在已有按钮区域内，也保持悬停
+  if (!newHovered && hoveredNode && queryBtnArea) {
+    const { x, y, w, h } = queryBtnArea
+    if (mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h) {
+      newHovered = hoveredNode
+    }
+  }
+  hoveredNode = newHovered || null
+
+  if (hoveredNode) {
+    const n = hoveredNode
+    const btnW = 76, btnH = 26
+    // 按钮放在节点的正下方，贴近节点边缘
+    const btnX = n.x - btnW / 2
+    const btnY = n.y + n.radius * n.scale + 6
+
+    // 按钮背景
+    ctx.beginPath()
+    ctx.roundRect(btnX, btnY, btnW, btnH, 6)
+    ctx.fillStyle = 'rgba(102,126,234,0.85)'
+    ctx.fill()
+
+    // 按钮边框发光
+    ctx.strokeStyle = 'rgba(102,126,234,0.5)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.roundRect(btnX, btnY, btnW, btnH, 6)
+    ctx.stroke()
+
+    // 按钮文字
+    ctx.font = '11px system-ui, sans-serif'
+    ctx.fillStyle = '#fff'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('名词查询 ›', btnX + btnW / 2, btnY + btnH / 2)
+
+    queryBtnArea = { x: btnX, y: btnY, w: btnW, h: btnH }
+  }
+
   // —— 物理模拟 ——
   if (simRunning) tickSimulation()
 }
@@ -552,11 +813,16 @@ function loadStoredKey() {
   try { storedAiKey.value = localStorage.getItem(AI_LS_KEY + aiModel.value) || '' }
   catch { storedAiKey.value = '' }
 }
+// 立即读取已保存的 Key
+loadStoredKey()
 function saveAiKey() {
   const key = aiKeyInput.value.trim()
   if (key) { localStorage.setItem(AI_LS_KEY + aiModel.value, key); aiKeyInput.value = ''; loadStoredKey() }
 }
 function clearAiKey() { localStorage.removeItem(AI_LS_KEY + aiModel.value); loadStoredKey() }
+
+// 切换模型时重新读取对应 Key
+watch(aiModel, loadStoredKey)
 
 // ============ 生命周期 ============
 let resizeObserver = null
@@ -750,4 +1016,221 @@ onUnmounted(() => {
 /* 过渡 */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.25s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* ========== 名词查询弹窗 ========== */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-card {
+  background: #1c1c1e;
+  border: 0.5px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.modal-hd {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 0.5px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+.modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f5f5f7;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.modal-close {
+  width: 30px; height: 30px;
+  border: none; border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.4);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+.modal-close:hover { background: rgba(255,69,58,0.15); color: #ff453a; }
+
+/* 弹窗滚动条 */
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.modal-body::-webkit-scrollbar { width: 5px; }
+.modal-body::-webkit-scrollbar-track { background: transparent; }
+.modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+}
+.modal-body::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+/* 弹幕底部 */
+.modal-ft {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 0.5px solid rgba(255,255,255,0.06);
+}
+.copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.copy-btn:hover:not(:disabled) {
+  background: rgba(102,126,234,0.12);
+  border-color: rgba(102,126,234,0.3);
+  color: #667eea;
+}
+.copy-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* 加载中状态（初始） */
+.modal-loading {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 16px; padding: 3rem 0;
+  color: rgba(255,255,255,0.4); font-size: 14px;
+}
+.modal-loader { display: flex; gap: 6px; }
+.modal-loader span {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #a855f7);
+  animation: loaderPulse 1.4s ease-in-out infinite;
+}
+.modal-loader span:nth-child(2) { animation-delay: 0.15s; background: linear-gradient(135deg, #a855f7, #3b82f6); }
+.modal-loader span:nth-child(3) { animation-delay: 0.3s; background: linear-gradient(135deg, #3b82f6, #667eea); }
+@keyframes loaderPulse {
+  0%, 80%, 100% { transform: scale(0.6) translateY(0); opacity: 0.3; }
+  40% { transform: scale(1) translateY(-6px); opacity: 1; }
+}
+
+/* 打字光标 */
+.stream-cursor {
+  display: inline-block;
+  margin-left: 2px;
+  color: #a78bfa;
+  font-weight: 700;
+  font-size: 16px;
+  animation: cursorBlink 0.7s step-end infinite;
+}
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ===== 内容样式 ===== */
+.modal-content {
+  font-size: 14px;
+  line-height: 1.9;
+  color: rgba(255,255,255,0.82);
+}
+.modal-content.streaming {
+  min-height: 120px;
+}
+/* 内容卡片块 */
+.q-block {
+  margin-bottom: 24px;
+}
+.q-block:last-child { margin-bottom: 0; }
+/* 小标题 */
+.q-sec-hd {
+  font-size: 16px;
+  font-weight: 600;
+  color: #a78bfa;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(167,139,250,0.15);
+  letter-spacing: 0.02em;
+}
+.q-sec-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #93c5fd;
+  margin-bottom: 8px;
+}
+.q-sec-main {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f5f5f7;
+  margin-bottom: 8px;
+}
+/* 加粗 */
+.modal-content strong {
+  color: #f5f5f7;
+  letter-spacing: 0.01em;
+}
+/* 编号列表 */
+.q-num-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  border-left: 2px solid rgba(102,126,234,0.3);
+  line-height: 1.6;
+}
+.q-num {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f5f5f7;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 50%;
+}
+/* 无序列表 */
+.q-bullet-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px 14px;
+  margin-bottom: 8px;
+  line-height: 1.7;
+}
+.q-bullet {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #a78bfa;
+  margin-top: 4px;
+}
+/* 错误状态 */
+.q-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  background: rgba(255,69,58,0.08);
+  border: 0.5px solid rgba(255,69,58,0.2);
+  border-radius: 10px;
+  color: #ff453a;
+  font-size: 13px;
+}
 </style>
