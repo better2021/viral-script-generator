@@ -1,3 +1,23 @@
+# QR 码页面优化实现计划
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 为二维码生成页面增加颜色定制、纠错等级、尺寸选择、复制图片和历史记录功能
+
+**Architecture:** 单文件改造 `src/pages/qrcode-generator/index.vue`，所有新增功能使用 qrcode 库已有 API 能力，历史记录存储到 localStorage
+
+**Tech Stack:** Vue 3 + qrcode npm 包
+
+---
+
+### Task 1: 更新 Template — 输入区 + 选项面板 + 历史记录
+
+**Files:**
+- Modify: `src/pages/qrcode-generator/index.vue:1-31` (template 全部替换)
+
+- [ ] **Step 1: 替换全部 template 内容**
+
+```html
 <template>
   <div class="qrcode-page">
     <div class="page-card">
@@ -19,8 +39,8 @@
             <i class="ti ti-x"></i>
           </button>
         </div>
-        <button class="btn-generate" :disabled="!text.trim() || loading" @click="generate">
-          <i class="ti ti-qrcode"></i> {{ loading ? '生成中…' : '生成二维码' }}
+        <button class="btn-generate" :disabled="!text.trim()" @click="generate">
+          <i class="ti ti-qrcode"></i> 生成二维码
         </button>
       </div>
 
@@ -34,9 +54,9 @@
         <div class="options-panel">
           <div class="option-row">
             <span class="option-label">前景色</span>
-            <input type="color" v-model="fgColor" class="color-picker" aria-label="前景色" @input="regenerate" />
+            <input type="color" v-model="fgColor" class="color-picker" @input="regenerate" />
             <span class="option-label">背景色</span>
-            <input type="color" v-model="bgColor" class="color-picker" aria-label="背景色" @input="regenerate" />
+            <input type="color" v-model="bgColor" class="color-picker" @input="regenerate" />
           </div>
 
           <div class="option-row">
@@ -99,14 +119,23 @@
           >
             <i class="ti ti-history"></i>
             <span class="history-text">{{ item.text }}</span>
-            <span class="history-time">{{ formatHistoryTime(item.createdAt) }}</span>
+            <span class="history-time">{{ item.time }}</span>
           </li>
         </ul>
       </div>
     </div>
   </div>
 </template>
+```
 
+### Task 2: 更新 Script — 全部状态与逻辑
+
+**Files:**
+- Modify: `src/pages/qrcode-generator/index.vue:32-74` (script 全部替换)
+
+- [ ] **Step 1: 替换全部 script 内容**
+
+```html
 <script setup>
 import { ref, nextTick } from 'vue'
 import QRCode from 'qrcode'
@@ -131,7 +160,6 @@ const sizes = [
 const text = ref('')
 const canvasRef = ref(null)
 const generated = ref(false)
-const loading = ref(false)
 const fgColor = ref('#1a1a1a')
 const bgColor = ref('#ffffff')
 const errorLevel = ref('M')
@@ -147,12 +175,9 @@ async function generate() {
   if (!val) return
 
   generated.value = false
-  loading.value = true
   await nextTick()
-  if (await doRender(val)) {
-    addHistory(val)
-  }
-  loading.value = false
+  await doRender(val)
+  addHistory(val)
 }
 
 /** 选项变化时自动重新渲染，不新增历史记录 */
@@ -160,15 +185,13 @@ async function regenerate() {
   if (!generated.value) return
   const val = text.value.trim()
   if (!val) return
-  loading.value = true
   await doRender(val)
-  loading.value = false
 }
 
-/** 核心渲染逻辑，成功返回 true */
+/** 核心渲染逻辑 */
 async function doRender(val) {
   const canvas = canvasRef.value
-  if (!canvas) return false
+  if (!canvas) return
 
   try {
     await QRCode.toCanvas(canvas, val, {
@@ -181,10 +204,8 @@ async function doRender(val) {
       errorCorrectionLevel: errorLevel.value,
     })
     generated.value = true
-    return true
   } catch (err) {
     console.error('二维码生成失败:', err)
-    return false
   }
 }
 
@@ -211,15 +232,13 @@ async function copyImage() {
     await navigator.clipboard.write([
       new ClipboardItem({ 'image/png': blob }),
     ])
-  } catch {
+  } catch (err) {
     // clipboard 不支持时降级为复制文本
     const val = text.value.trim()
     if (val) {
       try {
         await navigator.clipboard.writeText(val)
-      } catch (e) {
-        console.warn('复制失败:', e)
-      }
+      } catch { /* ignore */ }
     }
   }
 }
@@ -244,8 +263,6 @@ function saveHistory() {
   localStorage.setItem(STORAGE_HISTORY_KEY, JSON.stringify(history.value))
 }
 
-let historyIdCounter = 0
-
 function addHistory(val) {
   // 去重：已存在则移到最前
   const idx = history.value.findIndex(h => h.text === val)
@@ -256,33 +273,17 @@ function addHistory(val) {
     return
   }
 
+  const now = new Date()
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   history.value.unshift({
-    id: `${Date.now().toString(36)}-${historyIdCounter++}`,
+    id: Date.now().toString(36),
     text: val,
-    createdAt: Date.now(),
+    time,
   })
   if (history.value.length > MAX_HISTORY) {
     history.value = history.value.slice(0, MAX_HISTORY)
   }
   saveHistory()
-}
-
-/** 根据时间戳智能格式化显示时间 */
-function formatHistoryTime(ts) {
-  const d = new Date(ts)
-  const now = new Date()
-  const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const yesterday = new Date(today.getTime() - 86400000)
-  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-
-  if (+target === +today) return hhmm
-  if (+target === +yesterday) return `昨天 ${hhmm}`
-  if (d.getFullYear() === now.getFullYear()) {
-    return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${hhmm}`
-  }
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${hhmm}`
 }
 
 function restoreHistory(item) {
@@ -295,46 +296,19 @@ function clearHistory() {
   localStorage.removeItem(STORAGE_HISTORY_KEY)
 }
 </script>
+```
 
-<style scoped>
-.qrcode-page {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  padding-top: 40px;
-}
+### Task 3: 更新 Style — 全部新增样式
 
-.page-card {
-  width: 100%;
-  max-width: 480px;
-  background: var(--bg-secondary);
-  border: 0.5px solid var(--border-primary);
-  border-radius: var(--radius-lg);
-  padding: 32px 28px;
-  text-align: center;
-}
+**Files:**
+- Modify: `src/pages/qrcode-generator/index.vue:80-230` (style 替换全部)
 
-.page-title {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 6px;
-}
+- [ ] **Step 1: 替换全部 style 内容（在现有样式基础上新增）**
 
-.page-desc {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin: 0 0 24px;
-}
+保留现有的 `.qrcode-page`、`.page-card`、`.page-title`、`.page-desc`、`.input-row`、`.text-input`、`.btn-generate`、`.qr-section`、`.qr-wrapper`、`.qr-canvas`、`.qr-hint`、`@keyframes fadeIn` 样式不变，在 `.btn-generate:disabled` 后面追加以下新样式：
 
-/* ---- 输入区 ---- */
-.input-row {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 24px;
-}
-
+```css
+/* ---- 输入区增强 ---- */
 .input-wrap {
   position: relative;
   display: flex;
@@ -342,23 +316,7 @@ function clearHistory() {
 }
 
 .text-input {
-  width: 100%;
-  padding: 12px 40px 12px 16px;
-  border-radius: var(--radius-md);
-  border: 0.5px solid var(--border-primary);
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  font-size: 15px;
-  font-family: inherit;
-  outline: none;
-  box-sizing: border-box;
-  transition: border-color 0.2s;
-}
-.text-input::placeholder {
-  color: var(--text-tertiary);
-}
-.text-input:focus {
-  border-color: var(--accent);
+  padding-right: 40px;
 }
 
 .btn-clear {
@@ -379,52 +337,6 @@ function clearHistory() {
 .btn-clear:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
-}
-
-.btn-generate {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  padding: 11px 20px;
-  border-radius: var(--radius-md);
-  border: none;
-  background: var(--accent);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.15s;
-}
-.btn-generate:hover:not(:disabled) {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-}
-.btn-generate:active:not(:disabled) {
-  transform: scale(0.98);
-}
-.btn-generate:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* ---- 二维码展示 ---- */
-.qr-section {
-  animation: fadeIn 0.3s ease-out;
-}
-
-.qr-wrapper {
-  display: inline-flex;
-  padding: 16px;
-  border-radius: var(--radius-md);
-  background: #fff;
-  margin-bottom: 16px;
-}
-
-.qr-canvas {
-  display: block;
 }
 
 /* ---- 自定义选项面板 ---- */
@@ -543,15 +455,6 @@ function clearHistory() {
   transform: scale(0.98);
 }
 
-.qr-hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* ---- 历史记录 ---- */
 .history-section {
   margin-top: 28px;
@@ -634,15 +537,23 @@ function clearHistory() {
   font-size: 14px;
   color: var(--text-tertiary);
 }
+```
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-</style>
+### Task 4: 构建验证
+
+- [ ] **Step 1: 运行构建检查**
+
+```bash
+npm run build 2>&1
+```
+
+Expected: `✓ built in Xs`，无错误输出
+
+### Task 5: 提交
+
+- [ ] **Step 1: 提交代码**
+
+```bash
+git add src/pages/qrcode-generator/index.vue
+git commit -m "feat: 二维码页面增加颜色/纠错/尺寸定制及历史记录"
+```
