@@ -1,6 +1,7 @@
 import { ref, reactive } from 'vue'
 import { HOOKS, MIDDLES, ENDINGS, TITLES, HASHTAGS, COVER_TEMPLATES, HINTS, HOOK_HINTS, ENDING_HINTS } from '../templates/index.js'
 import { callAI, callAIStream, buildPrompt } from '../services/ai.js'
+import { buildEnhancePrompt } from '../prompts/index.js'
 
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)]
@@ -237,11 +238,115 @@ export function useGenerator() {
     return resultData.scenes.map(s => s.text).join('\n\n')
   }
 
+  function getSceneVisuals() {
+    return resultData.scenes.map((scene, index) => {
+      const total = resultData.scenes.length
+      const phase = index === 0 ? 'hook' : index === total - 1 ? 'ending' : 'middle'
+      const phaseLabel = phase === 'hook' ? '开头钩子' : phase === 'ending' ? '结尾互动' : '中段推进'
+      const summary = scene.text ? scene.text.slice(0, 28) : ''
+      return {
+        index: index + 1,
+        phase,
+        phaseLabel,
+        summary,
+      }
+    })
+  }
+
   function getCopyText(type) {
     if (type === 'jy') return getJianyinText()
     if (type === 'ht') return resultData.tags.map(h => '#' + h).join(' ')
     if (type === 'cv') return resultData.covers.map(c => c.main + '\n' + c.sub).join('\n\n---\n\n')
     return ''
+  }
+
+  async function enhanceScript(mode) {
+    const t = topic.value.trim()
+    if (!t) {
+      error.value = '请先输入主题关键词'
+      return false
+    }
+    if (loading.value) return false
+
+    const key = storedApiKey.value || apiKeyInput.value.trim()
+    if (!key) {
+      error.value = '请先输入 API Key'
+      return false
+    }
+    if (!resultData.scenes.length) {
+      error.value = '请先生成脚本，再进行增强'
+      return false
+    }
+
+    saveApiKey()
+    loading.value = true
+    error.value = ''
+    isStreaming.value = true
+    streamingText.value = ''
+    resultVisible.value = true
+    activeTab.value = 'sc'
+
+    try {
+      const prompt = buildEnhancePrompt({
+        scenes: resultData.scenes,
+        titles: resultData.titles,
+        tags: resultData.tags,
+        covers: resultData.covers,
+        style: style.value,
+        mode,
+      })
+
+      const fullText = await callAIStream(prompt, aiModel.value, key, (text) => {
+        streamingText.value = text
+      })
+
+      let result
+      try {
+        result = JSON.parse(fullText)
+      } catch {
+        const cleaned = fullText
+          .replace(/```json?\s*/g, '')
+          .replace(/```\s*/g, '')
+          .trim()
+        try {
+          result = JSON.parse(cleaned)
+        } catch {
+          throw new Error('AI 返回格式异常，无法解析')
+        }
+      }
+
+      const scenes = Array.isArray(result.scenes) ? result.scenes.map((s, i) => ({
+        i: i + 1,
+        text: s.text || '',
+        hint: s.hint || '',
+      })) : []
+      if (!scenes.length) throw new Error('AI 未返回有效分镜')
+
+      const titles = Array.isArray(result.titles) ? result.titles : []
+      const tags = Array.isArray(result.tags) ? result.tags : []
+      const covers = Array.isArray(result.covers) ? result.covers.map(c => ({
+        main: c.main || '',
+        sub: c.sub || '',
+        tags: Array.isArray(c.tags) ? c.tags : [],
+        platform: platform.value === 'xhs' ? 'xhs' : 'dy',
+      })) : []
+
+      resultData.scenes = scenes
+      resultData.titles = titles
+      resultData.tags = tags
+      resultData.covers = covers
+      resultData.topic = t
+      resultData.plat = platform.value === 'xhs' ? 'xhs' : 'dy'
+
+      isStreaming.value = false
+      loading.value = false
+      return true
+    } catch (e) {
+      error.value = e.message || '增强失败，请检查 API Key 和网络连接'
+      isStreaming.value = false
+      loading.value = false
+      return false
+    }
   }
 
   function getAiAnalyzePrompt() {
@@ -288,7 +393,9 @@ export function useGenerator() {
     clearApiKey,
     switchTab,
     getJianyinText,
+    getSceneVisuals,
     getCopyText,
+    enhanceScript,
     getAiAnalyzePrompt,
   }
 }

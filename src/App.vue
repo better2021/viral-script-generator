@@ -28,6 +28,11 @@
     />
 
     <div class="res" :class="{ on: resultVisible }">
+      <SceneTimeline v-if="resultVisible && !isStreaming && resultData.scenes.length" :visuals="sceneVisuals" />
+      <div v-if="resultVisible && !isStreaming && resultData.scenes.length" class="enhance-actions">
+        <button class="btn" @click="handleEnhance('polish')">润色脚本</button>
+        <button class="btn" @click="handleEnhance('compress')">压缩脚本</button>
+      </div>
       <StatsBar
         v-if="!isStreaming"
         :scenes="resultData.scenes"
@@ -144,6 +149,7 @@ import StatsBar from './components/StatsBar.vue'
 import SceneBlock from './components/SceneBlock.vue'
 import CoverPreview from './components/CoverPreview.vue'
 import CopyButton from './components/CopyButton.vue'
+import SceneTimeline from './components/SceneTimeline.vue'
 import { useGenerator } from './composables/useGenerator.js'
 
 const {
@@ -154,6 +160,7 @@ const {
   storedApiKey, loadStoredKey,
   hasUrl, genWithAI, saveApiKey, switchTab,
   getJianyinText, getCopyText,
+  getSceneVisuals, enhanceScript,
 } = useGenerator()
 
 const aiGenerated = ref(false)
@@ -178,6 +185,7 @@ const tabs = [
 const jianyinText = computed(() => getJianyinText())
 const coverAllText = computed(() => getCopyText('cv'))
 const hashtagText = computed(() => getCopyText('ht'))
+const sceneVisuals = computed(() => getSceneVisuals())
 
 const previewCovers = computed(() => resultData.covers.slice(0, 2))
 const altCovers = computed(() => resultData.covers.slice(2))
@@ -191,6 +199,13 @@ function onModelChange(val) {
 
 async function handleGenerate() {
   const ok = await genWithAI()
+  if (ok) {
+    aiGenerated.value = true
+  }
+}
+
+async function handleEnhance(mode) {
+  const ok = await enhanceScript(mode)
   if (ok) {
     aiGenerated.value = true
   }
@@ -210,6 +225,7 @@ async function cpText(text) {
     // 静默失败
   }
 }
+
 </script>
 
 <style scoped>
@@ -417,6 +433,18 @@ async function cpText(text) {
   background: rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+}
+
+.enhance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.enhance-actions .btn {
+  min-width: 130px;
 }
 
 /* ---- 流式打字机面板 ---- */

@@ -68,3 +68,14 @@ export function buildUserPrompt({ topic, platform, duration, style, refUrl }) {
 
   return prompt
 }
+
+export function buildEnhancePrompt({ scenes, titles, tags, covers, style, mode }) {
+  const modeLabel = mode === 'compress' ? '压缩脚本' : mode === 'interactive' ? '强化互动' : '润色脚本'
+  const scenesJson = JSON.stringify(scenes, null, 2)
+  const titlesJson = JSON.stringify(titles, null, 2)
+  const tagsJson = JSON.stringify(tags, null, 2)
+  const coversJson = JSON.stringify(covers, null, 2)
+  const styleLabel = style || '原始风格'
+
+  return `请对以下短视频脚本进行${modeLabel}，保持原有结构不变。\n\n现有脚本：\n${scenesJson}\n\n封面文案：\n${coversJson}\n\n标题备选：\n${titlesJson}\n\n话题标签：\n${tagsJson}\n\n要求：\n1. 保持分镜数量和基础结构，不要输出 markdown 代码块。\n2. 若为“压缩脚本”，请让旁白更精炼、更有冲击力。\n3. 若为“强化互动”，请让最后一句增加评论/点赞引导。\n4. 若为“润色脚本”，请让语言更口语化、更有节奏感。\n5. 继续保留当前风格：${styleLabel}\n\n请返回 JSON 格式：\n{\n  "scenes": [{ "text": "...", "hint": "..." }],\n  "titles": ["..."],\n  "tags": ["..."],\n  "covers": [{ "main": "...", "sub": "...", "tags": ["...", "..."] }]\n}`
+}
