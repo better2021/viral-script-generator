@@ -25,7 +25,7 @@
           </div>
           <div class="s-row" v-if="!storedAiKey">
             <label class="s-lbl">API Key</label>
-            <p class="s-hint">{{ (AI_MODELS.find(m => m.value === aiModel) || {}).keyPlaceholder }}</p>
+            <p class="s-hint">{{ (AI_MODELS.find(m => m.value === aiModel) || {}).apiKeyPlaceholder }}</p>
             <div class="s-key-row">
               <input type="password" v-model="aiKeyInput" placeholder="输入 API Key" class="s-input" />
               <button class="s-btn" @click="saveAiKey" :disabled="!aiKeyInput.trim()">保存</button>
@@ -110,14 +110,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-
-// ============ AI 模型配置 ============
-const AI_MODELS = [
-  { value: 'glm', label: 'GLM (智谱)', model: 'glm-4-plus', url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', keyPlaceholder: '以 glm- 开头' },
-  { value: 'deepseek', label: 'DeepSeek', model: 'deepseek-chat', url: 'https://api.deepseek.com/v1/chat/completions', keyPlaceholder: '以 sk- 开头' },
-  { value: 'doubao', label: '豆包 (字节)', model: 'doubao-seed-2-0-lite-260428', url: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions', keyPlaceholder: '火山引擎 ARK Key' },
-  { value: 'kimi', label: 'Kimi (月之暗面)', model: 'moonshot-v1-32k', url: 'https://api.moonshot.cn/v1/chat/completions', keyPlaceholder: '以 sk- 开头' },
-]
+import { AI_MODELS } from '../../templates/index.js'
 const AI_LS_KEY = 'viral_script_api_key_'
 
 const canvasAreaRef = ref(null)
@@ -130,6 +123,11 @@ const aiModel = ref('deepseek')
 const aiKeyInput = ref('')
 const storedAiKey = ref('')
 const aiConfigured = computed(() => !!storedAiKey.value)
+const currentModelConfig = computed(() => AI_MODELS.find(m => m.value === aiModel.value))
+
+// 不需要 response_format 的模型（返回原生 JSON）
+const NO_JSON_MODE_MODELS = ['doubao', 'agnes']
+const needResponseFormat = computed(() => !NO_JSON_MODE_MODELS.includes(aiModel.value))
 
 let canvas, ctx, animId
 let W = 0, H = 0
@@ -296,7 +294,7 @@ function addNode(keyword, parentId) {
 
 // ============ AI 调用 ============
 async function callAI(keyword, history) {
-  const cfg = AI_MODELS.find(m => m.value === aiModel.value)
+  const cfg = currentModelConfig.value
   if (!cfg) throw new Error('不支持的模型')
 
   const prompt = `你是一个思维扩散引擎。围绕「${keyword}」进行联想扩散，生成 5 个紧密相关的关键词。
@@ -316,7 +314,7 @@ JSON 格式返回（不要 markdown）：{"keywords":["词1","词2"...]}`
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.85, max_tokens: 2048,
   }
-  if (aiModel.value !== 'doubao') body.response_format = { type: 'json_object' }
+  if (needResponseFormat.value) body.response_format = { type: 'json_object' }
 
   const res = await fetch(cfg.url, {
     method: 'POST',
@@ -365,7 +363,7 @@ async function openQueryModal(term) {
   queryResult.value = ''
 
   try {
-    const cfg = AI_MODELS.find(m => m.value === aiModel.value)
+    const cfg = currentModelConfig.value
     if (!cfg || !storedAiKey.value) throw new Error('AI 未配置')
 
     const prompt = `用通俗易懂的方式解释「${term}」这个概念，要求结构清晰、排版美观。
@@ -953,7 +951,8 @@ onUnmounted(() => {
 .s-row:last-child { margin-bottom: 0; }
 .s-lbl { font-size: 13px; font-weight: 500; color: #f5f5f7; min-width: 70px; }
 .s-hint { font-size: 11px; color: rgba(255,255,255,0.3); width: 100%; }
-.s-select { flex:1; padding:7px 10px; font-size:13px; border:0.5px solid rgba(255,255,255,0.12); border-radius:8px; background:rgba(0,0,0,0.3); color:#f5f5f7; font-family:inherit; outline:none; cursor:pointer; }
+.s-select { flex:1; padding:7px 10px; font-size:13px; border:0.5px solid rgba(255,255,255,0.12); border-radius:8px; background:rgba(0,0,0,0.5); color:#fff; font-family:inherit; outline:none; cursor:pointer; }
+.s-select option { background:#1a1a1e; color:#fff; }
 .s-key-row { display: flex; gap: 6px; width: 100%; }
 .s-input { flex:1; padding:7px 10px; font-size:13px; border:0.5px solid rgba(255,255,255,0.12); border-radius:8px; background:rgba(0,0,0,0.3); color:#f5f5f7; font-family:inherit; outline:none; }
 .s-input:focus { border-color:rgba(120,80,255,0.4); }

@@ -4,25 +4,13 @@
  * 将用户模糊的推荐需求转化为 TMDB discover 参数，
  * 并对候选结果按相关性重新排名
  */
+import { AI_MODELS } from '../../../templates/index.js'
 
-const API_CONFIG = {
-  glm: {
-    url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-    model: 'glm-4-plus',
-  },
-  deepseek: {
-    url: 'https://api.deepseek.com/v1/chat/completions',
-    model: 'deepseek-chat',
-  },
-  doubao: {
-    url: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
-    model: 'doubao-seed-2-0-lite-260428',
-  },
-  kimi: {
-    url: 'https://api.moonshot.cn/v1/chat/completions',
-    model: 'moonshot-v1-32k',
-  },
-}
+const API_CONFIG = Object.fromEntries(AI_MODELS.map(m => [m.value, { url: m.url, model: m.model }]))
+
+// 不需要 response_format 的模型（返回原生 JSON）
+const NO_JSON_MODE_MODELS = ['doubao', 'agnes']
+const needResponseFormat = model => !NO_JSON_MODE_MODELS.includes(model)
 
 /**
  * 调用 AI 模型（仅限电影推荐场景）
@@ -43,7 +31,7 @@ async function callAIMovie(prompt, model, apiKey, temperature = 0.7) {
     max_tokens: 4096,
   }
 
-  if (model !== 'doubao') {
+  if (needResponseFormat(model)) {
     body.response_format = { type: 'json_object' }
   }
 
@@ -68,7 +56,7 @@ async function callAIMovie(prompt, model, apiKey, temperature = 0.7) {
         return JSON.parse(content)
       } catch {
         const match = content.match(/```(?:json)?\s*([\s\S]*?)```/)
-        if (match) return JSON.parse(match[1])
+        if (match && match[1]) return JSON.parse(match[1])
         throw new Error('AI 返回格式异常，无法解析')
       }
     }

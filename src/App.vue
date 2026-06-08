@@ -28,7 +28,6 @@
     />
 
     <div class="res" :class="{ on: resultVisible }">
-      <SceneTimeline v-if="resultVisible && !isStreaming && resultData.scenes.length" :visuals="sceneVisuals" />
       <div v-if="resultVisible && !isStreaming && resultData.scenes.length" class="enhance-actions">
         <button class="btn" @click="handleEnhance('polish')">润色脚本</button>
         <button class="btn" @click="handleEnhance('compress')">压缩脚本</button>
@@ -149,7 +148,6 @@ import StatsBar from './components/StatsBar.vue'
 import SceneBlock from './components/SceneBlock.vue'
 import CoverPreview from './components/CoverPreview.vue'
 import CopyButton from './components/CopyButton.vue'
-import SceneTimeline from './components/SceneTimeline.vue'
 import { useGenerator } from './composables/useGenerator.js'
 
 const {
@@ -159,8 +157,7 @@ const {
   resultVisible, activeTab, resultData,
   storedApiKey, loadStoredKey,
   hasUrl, genWithAI, saveApiKey, switchTab,
-  getJianyinText, getCopyText,
-  getSceneVisuals, enhanceScript,
+  getJianyinText, getCopyText, enhanceScript,
 } = useGenerator()
 
 const aiGenerated = ref(false)
@@ -185,7 +182,6 @@ const tabs = [
 const jianyinText = computed(() => getJianyinText())
 const coverAllText = computed(() => getCopyText('cv'))
 const hashtagText = computed(() => getCopyText('ht'))
-const sceneVisuals = computed(() => getSceneVisuals())
 
 const previewCovers = computed(() => resultData.covers.slice(0, 2))
 const altCovers = computed(() => resultData.covers.slice(2))

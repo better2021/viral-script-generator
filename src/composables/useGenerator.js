@@ -238,21 +238,6 @@ export function useGenerator() {
     return resultData.scenes.map(s => s.text).join('\n\n')
   }
 
-  function getSceneVisuals() {
-    return resultData.scenes.map((scene, index) => {
-      const total = resultData.scenes.length
-      const phase = index === 0 ? 'hook' : index === total - 1 ? 'ending' : 'middle'
-      const phaseLabel = phase === 'hook' ? '开头钩子' : phase === 'ending' ? '结尾互动' : '中段推进'
-      const summary = scene.text ? scene.text.slice(0, 28) : ''
-      return {
-        index: index + 1,
-        phase,
-        phaseLabel,
-        summary,
-      }
-    })
-  }
-
   function getCopyText(type) {
     if (type === 'jy') return getJianyinText()
     if (type === 'ht') return resultData.tags.map(h => '#' + h).join(' ')
@@ -393,7 +378,6 @@ export function useGenerator() {
     clearApiKey,
     switchTab,
     getJianyinText,
-    getSceneVisuals,
     getCopyText,
     enhanceScript,
     getAiAnalyzePrompt,

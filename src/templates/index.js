@@ -148,8 +148,9 @@ export const STYLE_MAP = {
 }
 
 export const AI_MODELS = [
-  { value: 'glm', label: 'GLM (智谱)', apiKeyLabel: '智谱 API Key', apiKeyPlaceholder: '请输入智谱 API Key（以 glm- 开头）' },
-  { value: 'deepseek', label: 'DeepSeek', apiKeyLabel: 'DeepSeek API Key', apiKeyPlaceholder: '请输入 DeepSeek API Key（以 sk- 开头）' },
-  { value: 'doubao', label: '豆包 (字节)', apiKeyLabel: '豆包 API Key', apiKeyPlaceholder: '火山引擎 ARK API Key，需先订阅模型' },
-  { value: 'kimi', label: 'Kimi (月之暗面)', apiKeyLabel: 'Kimi API Key', apiKeyPlaceholder: '请输入 Kimi API Key（以 sk- 开头）' },
+  { value: 'glm', label: 'GLM (智谱)', model: 'glm-4-plus', url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', apiKeyLabel: '智谱 API Key', apiKeyPlaceholder: '请输入智谱 API Key（以 glm- 开头）' },
+  { value: 'deepseek', label: 'DeepSeek', model: 'deepseek-chat', url: 'https://api.deepseek.com/v1/chat/completions', apiKeyLabel: 'DeepSeek API Key', apiKeyPlaceholder: '请输入 DeepSeek API Key（以 sk- 开头）' },
+  { value: 'doubao', label: '豆包 (字节)', model: 'doubao-seed-2-0-lite-260428', url: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions', apiKeyLabel: '豆包 API Key', apiKeyPlaceholder: '火山引擎 ARK API Key，需先订阅模型' },
+  { value: 'kimi', label: 'Kimi (月之暗面)', model: 'moonshot-v1-32k', url: 'https://api.moonshot.cn/v1/chat/completions', apiKeyLabel: 'Kimi API Key', apiKeyPlaceholder: '请输入 Kimi API Key（以 sk- 开头）' },
+  { value: 'agnes', label: 'Agnes AI', model: 'agnes-2.0-flash', url: 'https://apihub.agnes-ai.com/v1/chat/completions', apiKeyLabel: 'Agnes API Key', apiKeyPlaceholder: '请输入 Agnes API Key' }
 ]

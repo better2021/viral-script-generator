@@ -388,6 +388,12 @@ onUnmounted(() => {
 select.key-input {
   cursor: pointer;
   appearance: auto;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+select.key-input option {
+  background: #1a1a1e;
+  color: #fff;
 }
 .small-btn {
   padding: 8px 12px;
