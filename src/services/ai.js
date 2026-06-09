@@ -7,7 +7,7 @@ const API_CONFIG = Object.fromEntries(AI_MODELS.map(m => [m.value, { url: m.url,
 const NO_JSON_MODE_MODELS = ['doubao', 'agnes']
 const needResponseFormat = model => !NO_JSON_MODE_MODELS.includes(model)
 
-export async function callAI(prompt, model, apiKey) {
+export async function callAI(prompt, model, apiKey, temperature = 0.8) {
   const config = API_CONFIG[model]
   if (!config) throw new Error(`不支持的模型: ${model}`)
 
@@ -18,7 +18,7 @@ export async function callAI(prompt, model, apiKey) {
       { role: 'user', content: prompt },
     ],
     ...(needResponseFormat(model) && { response_format: { type: 'json_object' } }),
-    temperature: 0.8,
+    temperature,
     max_tokens: 4096,
   }
 
@@ -63,7 +63,7 @@ export async function callAI(prompt, model, apiKey) {
  * @param {(text: string) => void} onText 每次收到新内容时回调当前累积文本
  * @returns {Promise<string>} 完整响应文本
  */
-export async function callAIStream(prompt, model, apiKey, onText) {
+export async function callAIStream(prompt, model, apiKey, onText, temperature = 0.8) {
   const config = API_CONFIG[model]
   if (!config) throw new Error(`不支持的模型: ${model}`)
 
@@ -74,7 +74,7 @@ export async function callAIStream(prompt, model, apiKey, onText) {
       { role: 'user', content: prompt },
     ],
     ...(needResponseFormat(model) && { response_format: { type: 'json_object' } }),
-    temperature: 0.8,
+    temperature,
     max_tokens: 4096,
     stream: true,
   }

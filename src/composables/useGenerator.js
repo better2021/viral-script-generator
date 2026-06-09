@@ -170,9 +170,10 @@ export function useGenerator() {
         refUrl: refUrl.value,
       })
 
+      // 首次生成使用稍高温度（0.85）激发创意，增强钩子冲击力
       const fullText = await callAIStream(prompt, aiModel.value, key, (text) => {
         streamingText.value = text
-      })
+      }, 0.85)
 
       // 尝试解析 JSON，兼容可能出现的 markdown 代码块包裹
       let result
@@ -281,9 +282,10 @@ export function useGenerator() {
         mode,
       })
 
+      // 增强时使用偏低温度（0.7）保持结构稳定，减少内容偏离
       const fullText = await callAIStream(prompt, aiModel.value, key, (text) => {
         streamingText.value = text
-      })
+      }, 0.7)
 
       let result
       try {
