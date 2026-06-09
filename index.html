@@ -8,21 +8,25 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css" />
     <style>
       :root {
-        --bg-primary: #000000;
+        /* Apple/Stripe 融合设计系统 */
+        /* 基础色 */
+        --bg-primary: #050507;
         --bg-secondary: rgba(255, 255, 255, 0.06);
         --bg-tertiary: rgba(255, 255, 255, 0.1);
-        --text-primary: #f5f5f7;
-        --text-secondary: rgba(255, 255, 255, 0.65);
-        --text-tertiary: rgba(255, 255, 255, 0.4);
-        --border-primary: rgba(255, 255, 255, 0.12);
+        --text-primary: #f8f9fa;
+        --text-secondary: rgba(248, 249, 250, 0.65);
+        --text-tertiary: rgba(248, 249, 250, 0.45);
+        --border-primary: rgba(255, 255, 255, 0.15);
         --border-secondary: rgba(255, 255, 255, 0.08);
-        --accent: #007aff;
-        --accent-hover: #0066d9;
-        --accent-green: #30d158;
-        --accent-orange: #ff9f0a;
+        --accent: #6366f1;
+        --accent-hover: #4f46e5;
+        --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        --accent-gradient-text: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.4);
+        --shadow-medium: 0 12px 40px rgba(0, 0, 0, 0.5);
         --radius-sm: 8px;
-        --radius-md: 12px;
-        --radius-lg: 16px;
+        --radius-md: 14px;
+        --radius-lg: 20px;
 
         /* 兼容旧 CSS 变量引用 */
         --color-background-primary: var(--bg-primary);
@@ -34,7 +38,7 @@
         --color-border-secondary: var(--border-secondary);
         --border-radius-md: var(--radius-md);
         --border-radius-lg: var(--radius-lg);
-        --font-sans: -apple-assistant, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+        --font-sans: -apple-assistant, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
         --font-mono: 'SF Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
       }
       * {
@@ -44,6 +48,10 @@
       }
       body {
         background: var(--bg-primary);
+        background-image:
+          radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.05) 0%, transparent 40%),
+          radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 40%);
+        background-attachment: fixed;
         color: var(--text-primary);
         font-family: -apple-assistant, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
         -webkit-font-smoothing: antialiased;
@@ -54,8 +62,14 @@
       }
       #app {
         width: 100%;
-        max-width: 680px;
-        padding: 0 20px;
+        max-width: 760px;
+        padding: 40px 24px;
+      }
+      /* 全局平滑动画 */
+      * {
+        transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 150ms;
       }
     </style>
   </head>

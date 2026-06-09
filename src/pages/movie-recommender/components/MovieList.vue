@@ -1,6 +1,7 @@
 <template>
-  <div class="mlist">
-    <div class="grid">
+  <!-- 电影列表 - Apple/Stripe 风格 -->
+  <div class="movie-list">
+    <div class="movie-grid">
       <MovieCard
         v-for="movie in movies"
         :key="movie.id"
@@ -22,12 +23,13 @@ defineEmits(['select'])
 </script>
 
 <style scoped>
-.mlist {
+.movie-list {
   width: 100%;
 }
-.grid {
+
+.movie-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
 }
 </style>

@@ -45,26 +45,27 @@ const feature = ref('viral-script')
 .feature-nav {
   display: flex;
   gap: 4px;
-  margin: 30px 0;
+  margin: 32px 0 40px;
   background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--border-primary);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-secondary);
+  border-radius: 16px;
   padding: 4px;
   position: relative;
   z-index: 100;
+  backdrop-filter: blur(20px);
 }
 .nav-btn {
   flex: 1;
   padding: 10px 14px;
   border: none;
-  border-radius: var(--radius-md);
-  font-size: 14px;
+  border-radius: 12px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-family: inherit;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -72,10 +73,11 @@ const feature = ref('viral-script')
 }
 .nav-btn:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 .nav-btn.active {
-  background: rgba(0, 122, 255, 0.15);
+  background: rgba(99, 102, 241, 0.12);
   color: var(--accent);
+  font-weight: 600;
 }
 </style>

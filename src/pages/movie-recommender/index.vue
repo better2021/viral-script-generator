@@ -1,63 +1,69 @@
 <template>
+  <!-- 电影推荐器 - Apple/Stripe 融合设计 -->
   <div class="movie-page">
-    <div class="hd">
-      <div class="hd-row">
-        <div>
-          <h1><i class="ti ti-device-tv" aria-hidden="true" style="font-size:22px;vertical-align:-3px;margin-right:8px;color:var(--accent)"></i>AI 电影推荐器</h1>
-          <p>智能推荐 · 海量片库 · 一键收藏</p>
-        </div>
-        <button class="settings-toggle" :class="{ on: showSettings }" @click="showSettings = !showSettings" :title="tmdbConfigured ? '已配置 TMDB' : '未配置 TMDB'">
-          <i class="ti ti-settings"></i>
-          <span v-if="tmdbConfigured" class="dot-on"></span>
-        </button>
+    <!-- 页面头部 -->
+    <header class="page-header">
+      <div class="header-content">
+        <h1 class="page-title">AI 电影推荐器</h1>
+        <p class="page-subtitle">智能推荐 · 海量片库 · 一键收藏</p>
       </div>
-    </div>
+      <button
+        class="config-btn"
+        :class="{ active: showSettings, configured: tmdbConfigured }"
+        @click="showSettings = !showSettings"
+        :title="tmdbConfigured ? '已配置 TMDB' : '未配置 TMDB'"
+      >
+        <i class="ti ti-settings"></i>
+        <span v-if="tmdbConfigured" class="status-dot"></span>
+      </button>
+    </header>
 
-    <!-- 设置面板（可折叠） -->
-    <div v-if="showSettings" class="card settings-panel">
-      <div class="setting-row">
-        <label class="setting-lbl">TMDB API Key</label>
-        <p class="setting-hint">在 <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">TMDB API 设置页</a> 申请（免费）</p>
-        <div class="key-row">
+    <!-- 配置面板 -->
+    <div v-if="showSettings" class="config-panel">
+      <div class="config-section">
+        <label class="config-label">TMDB API Key</label>
+        <p class="config-hint">在 <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">TMDB API 设置页</a> 申请（免费）</p>
+        <div class="config-row">
           <input
             type="password"
             :value="tmdbApiKey"
             @input="onTmdbKeyInput($event.target.value)"
             placeholder="输入 TMDB API Key (v3 auth)"
-            class="key-input"
+            class="config-input"
           />
-          <button v-if="tmdbApiKey" class="small-btn" @click="clearTmdbConfig">清除</button>
+          <button v-if="tmdbApiKey" class="btn-sm btn-ghost" @click="clearTmdbConfig">清除</button>
         </div>
       </div>
 
-      <div class="setting-divider"></div>
+      <div class="config-divider"></div>
 
-      <div class="setting-row">
-        <label class="setting-lbl">AI 推荐模型</label>
-        <p class="setting-hint">用于分析你的推荐需求并生成搜索参数</p>
-        <div class="key-row">
-          <select :value="aiModel" @change="onAiModelChange($event.target.value)" class="key-input">
+      <div class="config-section">
+        <label class="config-label">AI 推荐模型</label>
+        <p class="config-hint">用于分析推荐需求并生成搜索参数</p>
+        <div class="config-row">
+          <select :value="aiModel" @change="onAiModelChange($event.target.value)" class="config-select">
             <option v-for="m in aiModels" :key="m.value" :value="m.value">{{ m.label }}</option>
           </select>
         </div>
       </div>
 
-      <div class="setting-row" v-if="!aiStoredApiKey">
-        <label class="setting-lbl">{{ currentAiModel?.apiKeyLabel || 'AI API Key' }}</label>
-        <div class="key-row">
+      <div class="config-section" v-if="!aiStoredApiKey">
+        <label class="config-label">{{ currentAiModel?.apiKeyLabel || 'AI API Key' }}</label>
+        <div class="config-row">
           <input
             type="password"
             v-model="aiApiKeyInput"
             :placeholder="currentAiModel?.apiKeyPlaceholder || '输入 API Key'"
-            class="key-input"
+            class="config-input"
           />
-          <button class="small-btn" @click="saveAiApiKey" :disabled="!aiApiKeyInput.trim()">保存</button>
+          <button class="btn-sm btn-primary" @click="saveAiApiKey" :disabled="!aiApiKeyInput.trim()">保存</button>
         </div>
       </div>
-      <div class="setting-row" v-else>
-        <label class="setting-lbl">{{ currentAiModel?.apiKeyLabel || 'AI API Key' }}</label>
-        <span class="key-saved"><i class="ti ti-check"></i> Key 已配置（{{ aiModel }}）</span>
-        <button class="small-btn" @click="clearAiApiKey">清除</button>
+      <div class="config-section config-section--saved" v-else>
+        <div class="config-row">
+          <span class="config-saved"><i class="ti ti-check-circle"></i> Key 已配置（{{ aiModel }}）</span>
+          <button class="btn-sm btn-ghost" @click="clearAiApiKey">清除</button>
+        </div>
       </div>
     </div>
 
@@ -72,62 +78,65 @@
     />
 
     <!-- AI 推荐区 -->
-    <div class="ai-section">
-      <div class="ai-label">
-        <i class="ti ti-sparkles" aria-hidden="true"></i> AI 智能推荐
+    <section class="ai-section">
+      <div class="ai-header">
+        <div class="ai-badge">
+          <i class="ti ti-sparkles"></i> AI 智能推荐
+        </div>
+        <p class="ai-desc">描述你想看的电影，AI 为你精准推荐</p>
       </div>
-      <div class="ai-row">
+      <div class="ai-input-group">
         <div class="ai-input-wrap">
           <input
             type="text"
             v-model="aiQuery"
             placeholder="描述你的需求，如：推荐像《霸王别姬》那样有时代感的电影"
-            @keyup.enter="aiRecommend"
+            @keyup.enter="handleAiRecommend"
             class="ai-input"
           />
           <button
             v-if="voiceSupported"
             class="voice-btn"
             :class="{ recording: isListening }"
-            :title="isListening ? '点击停止录音' : '语音输入'"
+            :title="isListening ? '点击停止' : '语音输入'"
             @click="toggleVoiceInput"
           >
-            <i class="ti ti-microphone" aria-hidden="true"></i>
+            <i class="ti ti-microphone"></i>
           </button>
         </div>
         <button
-          class="ai-btn"
+          class="ai-submit"
           :class="{ loading: aiRecommending }"
           :disabled="aiRecommending"
           @click="handleAiRecommend"
         >
-          <i v-if="aiRecommending" class="ti ti-loader" aria-hidden="true"></i>
-          <i v-else class="ti ti-wand" aria-hidden="true"></i>
+          <i v-if="aiRecommending" class="ti ti-loader"></i>
+          <i v-else class="ti ti-wand"></i>
           {{ aiRecommending ? '分析中...' : 'AI 推荐' }}
         </button>
       </div>
-      <p v-if="!tmdbConfigured" class="ai-hint">
-        <i class="ti ti-info-circle" aria-hidden="true"></i> 请先在上方设置中配置 TMDB API Key
+      <p v-if="!tmdbConfigured" class="ai-notice">
+        请先在上方设置中配置 TMDB API Key
       </p>
-    </div>
+    </section>
 
     <!-- AI 推理说明 -->
-    <div class="reasoning" v-if="aiReasoning">
-      <i class="ti ti-info-circle" aria-hidden="true"></i> {{ aiReasoning }}
+    <div v-if="aiReasoning" class="reasoning-banner">
+      <i class="ti ti-info-circle"></i> {{ aiReasoning }}
     </div>
 
     <!-- 错误提示 -->
-    <div class="error-msg" v-if="error || aiRecommendationError">
-      <i class="ti ti-alert-circle" aria-hidden="true"></i> {{ error || aiRecommendationError }}
+    <div v-if="error || aiRecommendationError" class="error-banner">
+      <i class="ti ti-alert-circle"></i> {{ error || aiRecommendationError }}
     </div>
 
     <!-- 结果列表 -->
-    <div class="results" v-if="!loading && movies.length">
-      <div class="result-hd">
-        <span v-if="query || genre">找到 {{ movies.length }} 部影片</span>
+    <div v-if="!loading && movies.length" class="results-section">
+      <div class="results-header">
+        <span v-if="query || genre">搜索结果</span>
         <span v-else-if="aiReasoning">AI 推荐结果</span>
         <span v-else>热门推荐</span>
-        <span class="result-count">{{ movies.length }} 部</span>
+        <span class="results-count">{{ movies.length }} 部影片</span>
       </div>
       <MovieList
         :movies="movies"
@@ -135,15 +144,15 @@
       />
     </div>
 
-    <!-- 加载中 -->
-    <div class="loading-state" v-if="loading">
-      <i class="ti ti-loader" aria-hidden="true"></i>
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-state">
+      <div class="loading-spinner"></div>
       <p>{{ loadingStage || (aiRecommending ? 'AI 推荐中...' : '正在搜索...') }}</p>
     </div>
 
     <!-- 空状态 -->
-    <div class="empty" v-else-if="!loading && searched && !movies.length && !error && !aiRecommendationError">
-      <i class="ti ti-mood-empty" aria-hidden="true"></i>
+    <div v-else-if="!loading && searched && !movies.length && !error && !aiRecommendationError" class="empty-state">
+      <i class="ti ti-mood-empty"></i>
       <p>没有找到匹配的影片，换个关键词试试</p>
     </div>
 
@@ -188,46 +197,33 @@ const isListening = ref(false)
 const voiceError = ref('')
 
 function toggleVoiceInput() {
-  if (isListening.value) {
-    stopVoiceInput()
-    return
-  }
+  if (isListening.value) { stopVoiceInput(); return }
   startVoiceInput()
 }
 
 function startVoiceInput() {
   if (!SpeechRecognitionAPI) return
-
-  // 点击录音时清空输入框
   aiQuery.value = ''
-
   const recog = new SpeechRecognitionAPI()
   recog.lang = 'zh-CN'
   recog.continuous = true
   recog.interimResults = true
-
   recog.onresult = (event) => {
-    // 每次从 event.results 完整重建文字，确保实时显示
     let text = ''
     for (let i = 0; i < event.results.length; i++) {
       text += event.results[i][0].transcript
     }
     aiQuery.value = text
   }
-
   recog.onerror = (event) => {
     if (event.error === 'not-allowed') {
       voiceError.value = '语音权限被拒绝，请在浏览器设置中允许麦克风'
     } else if (event.error !== 'no-speech') {
-      voiceError.value = `语音识别错误: ${event.error}`
+      voiceError.value = '语音识别错误: ' + event.error
     }
     isListening.value = false
   }
-
-  recog.onend = () => {
-    isListening.value = false
-  }
-
+  recog.onend = () => { isListening.value = false }
   recognitionInstance = recog
   isListening.value = true
   voiceError.value = ''
@@ -235,390 +231,510 @@ function startVoiceInput() {
 }
 
 function stopVoiceInput() {
-  if (recognitionInstance) {
-    recognitionInstance.stop()
-    recognitionInstance = null
-  }
+  if (recognitionInstance) { recognitionInstance.stop(); recognitionInstance = null }
   isListening.value = false
 }
 
-/** 优先使用 TMDB 类型列表，无 TMDB 时用本地类型 */
-const displayGenres = computed(() => {
-  return tmdbGenres.value.length ? tmdbGenres.value : genres
-})
+const displayGenres = computed(() => tmdbGenres.value.length ? tmdbGenres.value : genres)
 
-function handleSearch() {
-  search()
-}
+function handleSearch() { search() }
 
-/** 点击 AI 推荐：先停止录音，再发起推荐 */
 function handleAiRecommend() {
   stopVoiceInput()
   aiRecommend()
 }
 
-// 无 TMDB Key 时首次加载本地热门
-onMounted(() => {
-  if (!tmdbApiKey.value) {
-    search()
-  }
-})
-
-// 卸载时停止语音识别
-onUnmounted(() => {
-  stopVoiceInput()
-})
-
+onMounted(() => { if (!tmdbApiKey.value) search() })
+onUnmounted(() => stopVoiceInput())
 </script>
 
 <style scoped>
+/* ============================================
+   Apple/Stripe 融合设计系统 - 电影推荐器页面
+   ============================================ */
+
+/* ---- 页面容器 ---- */
 .movie-page {
-  padding: 0;
+  width: 100%;
+  animation: pageEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.hd {
-  margin-bottom: 1.25rem;
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.hd-row {
+
+/* ---- 页面头部 ---- */
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-}
-.hd h1 {
-  font-size: 22px;
-  font-weight: 600;
-  color: #f5f5f7;
-  letter-spacing: -0.3px;
-}
-.hd p {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-top: 6px;
+  margin-bottom: 32px;
 }
 
-/* 设置按钮 */
-.settings-toggle {
+.header-content {
+  flex: 1;
+}
+
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: var(--accent-gradient-text);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+/* ---- 配置按钮 ---- */
+.config-btn {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border: 0.5px solid var(--border-secondary);
-  border-radius: var(--radius-md);
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  transition: all 0.2s ease;
-  font-size: 16px;
-  margin-top: 2px;
+  font-size: 18px;
+  backdrop-filter: blur(12px);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.settings-toggle:hover,
-.settings-toggle.on {
+.config-btn:hover {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
-  border-color: var(--accent);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
 }
-.dot-on {
+.config-btn.active {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: var(--accent);
+}
+.config-btn.configured {
+  color: var(--text-secondary);
+}
+.status-dot {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #30d158;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
 }
 
-/* 设置面板 */
-.settings-panel {
-  margin-bottom: 1rem;
+/* ---- 配置面板 ---- */
+.config-panel {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(20px);
+  animation: panelSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.setting-row {
-  margin-bottom: 12px;
+
+@keyframes panelSlide {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.setting-row:last-child {
-  margin-bottom: 0;
+
+.config-section {
+  margin-bottom: 16px;
 }
-.setting-lbl {
+.config-section:last-child { margin-bottom: 0; }
+.config-section--saved { margin-top: 8px; }
+
+.config-label {
   display: block;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-primary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   margin-bottom: 4px;
 }
-.setting-hint {
-  font-size: 11px;
+
+.config-hint {
+  font-size: 12px;
   color: var(--text-tertiary);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  line-height: 1.5;
 }
-.setting-hint a {
+.config-hint a {
   color: var(--accent);
   text-decoration: none;
-}
-.setting-hint a:hover {
-  text-decoration: underline;
-}
-.setting-divider {
-  height: 0.5px;
-  background: var(--border-secondary);
-  margin: 12px 0;
-}
-.key-row {
-  display: flex;
-  gap: 6px;
-}
-.key-input {
-  flex: 1;
-  padding: 8px 10px;
-  font-size: 13px;
-  border: 0.5px solid var(--border-secondary);
-  border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.2);
-  color: var(--text-primary);
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.2s ease;
-}
-.key-input:focus {
-  border-color: var(--accent);
-}
-.key-input::placeholder {
-  color: var(--text-tertiary);
-}
-select.key-input {
-  cursor: pointer;
-  appearance: auto;
-  background: rgba(0, 0, 0, 0.5);
-  color: #fff;
-}
-select.key-input option {
-  background: #1a1a1e;
-  color: #fff;
-}
-.small-btn {
-  padding: 8px 12px;
-  font-size: 12px;
   font-weight: 500;
-  border: 0.5px solid var(--border-secondary);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-family: inherit;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
 }
-.small-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
-}
-.small-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.key-saved {
-  font-size: 12px;
-  color: #30d158;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.config-hint a:hover { text-decoration: underline; }
+
+.config-divider {
+  height: 1px;
+  background: linear-gradient(90deg, var(--border-secondary), transparent);
+  margin: 16px 0;
 }
 
-/* AI 推荐区 */
-.ai-section {
-  margin-top: 1rem;
-  margin-bottom: 0.75rem;
-}
-.ai-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  letter-spacing: 0.02em;
-}
-.ai-row {
+.config-row {
   display: flex;
   gap: 8px;
 }
-.ai-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 14px 54px 14px 18px;
-  font-size: 14px;
-  border: 0.5px solid var(--border-secondary);
-  border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.2);
+
+.config-input {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: 13px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
   color: var(--text-primary);
   font-family: inherit;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.config-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  background: rgba(0, 0, 0, 0.4);
+}
+.config-input::placeholder { color: var(--text-tertiary); }
+
+.config-select {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: 13px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='rgba(255,255,255,0.45)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+.config-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+.config-select option { background: #1c1c1e; color: var(--text-primary); }
+
+.config-saved {
+  flex: 1;
+  font-size: 13px;
+  color: #22c55e;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.config-saved i { font-size: 15px; }
+
+/* ---- 按钮系统 ---- */
+.btn-sm {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 10px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-ghost {
+  border: 1px solid var(--border-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.btn-primary {
+  border: none;
+  background: var(--accent-gradient);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: scale(1.02);
+}
+.btn-sm:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---- AI 推荐区 ---- */
+.ai-section {
+  margin-top: 28px;
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06), rgba(139, 92, 246, 0.06));
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: var(--radius-lg);
+  position: relative;
+  overflow: hidden;
+}
+.ai-section::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.ai-header { margin-bottom: 16px; }
+
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(99, 102, 241, 0.1);
+  padding: 4px 12px;
+  border-radius: 20px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.ai-badge i { font-size: 13px; }
+
+.ai-desc {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+}
+
+.ai-input-group {
+  display: flex;
+  gap: 10px;
+}
+
+.ai-input-wrap {
+  position: relative;
+  flex: 1;
+}
+
+.ai-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 52px 14px 18px;
+  font-size: 14px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+  backdrop-filter: blur(8px);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .ai-input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12), 0 0 20px rgba(99, 102, 241, 0.05);
+  background: rgba(0, 0, 0, 0.5);
 }
 .ai-input::placeholder {
   color: var(--text-tertiary);
   font-size: 13px;
 }
-.ai-input-wrap {
-  position: relative;
-  flex: 1;
-}
-.ai-input-wrap .ai-input {
-  padding-right: 54px;
-}
+
 .voice-btn {
   position: absolute;
-  right: 6px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: var(--text-tertiary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
   font-size: 17px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .voice-btn:hover {
   color: var(--accent);
-  background: rgba(0, 122, 255, 0.1);
+  background: rgba(99, 102, 241, 0.1);
 }
 .voice-btn.recording {
-  color: #ff453a;
-  background: rgba(255, 69, 58, 0.12);
-  animation: voice-pulse 1.2s ease-in-out infinite;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  animation: pulseRing 1.5s ease-in-out infinite;
 }
-@keyframes voice-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 69, 58, 0.3); }
-  50% { box-shadow: 0 0 0 8px rgba(255, 69, 58, 0); }
+
+@keyframes pulseRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
+  50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
 }
-.ai-btn {
-  padding: 14px 24px;
+
+.ai-submit {
+  padding: 14px 28px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   border: none;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 12px;
+  background: var(--accent-gradient);
   color: #fff;
   cursor: pointer;
   font-family: inherit;
   white-space: nowrap;
   display: flex;
   align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
+  gap: 8px;
   flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.25);
 }
-.ai-btn:hover:not(:disabled) {
-  opacity: 0.9;
-  transform: translateY(-1px);
+.ai-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.35);
 }
-.ai-btn:disabled {
+.ai-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+.ai-submit:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.ai-btn.loading {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+.ai-submit i.ti-loader {
+  animation: spin 0.8s linear infinite;
 }
-.ai-btn i.ti-loader {
-  animation: spin 1s linear infinite;
-}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-.ai-hint {
+
+.ai-notice {
   font-size: 12px;
   color: var(--text-tertiary);
-  margin-top: 6px;
+  margin-top: 10px;
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-/* AI 推理 */
-.reasoning {
-  padding: 10px 14px;
-  background: rgba(102, 126, 234, 0.1);
-  border: 0.5px solid rgba(102, 126, 234, 0.25);
-  border-radius: var(--radius-md);
+/* ---- AI 推理说明 ---- */
+.reasoning-banner {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 12px;
   font-size: 13px;
   color: var(--text-secondary);
-  margin-bottom: 0.75rem;
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  line-height: 1.5;
+  gap: 8px;
+  line-height: 1.6;
+  animation: fadeIn 0.3s ease;
+}
+.reasoning-banner i {
+  color: var(--accent);
+  margin-top: 2px;
+  flex-shrink: 0;
 }
 
-.results {
-  margin-top: 1.25rem;
+/* ---- 错误提示 ---- */
+.error-banner {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 12px;
+  font-size: 13px;
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeIn 0.3s ease;
 }
-.result-hd {
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- 结果区域 ---- */
+.results-section {
+  margin-top: 32px;
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.results-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 12px;
+  letter-spacing: -0.2px;
+  margin-bottom: 16px;
 }
-.result-count {
-  font-size: 12px;
+
+.results-count {
+  font-size: 13px;
   color: var(--text-tertiary);
   font-weight: 400;
 }
 
-/* 加载状态 */
+/* ---- 加载状态 ---- */
 .loading-state {
   text-align: center;
-  padding: 3rem 0;
+  padding: 64px 0;
   color: var(--text-tertiary);
 }
-.loading-state i {
-  font-size: 28px;
-  display: block;
-  margin-bottom: 12px;
-  animation: spin 1s linear infinite;
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--border-secondary);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto 16px;
 }
+
 .loading-state p {
   font-size: 14px;
 }
 
-.empty {
+/* ---- 空状态 ---- */
+.empty-state {
   text-align: center;
-  padding: 3rem 0;
+  padding: 64px 0;
   color: var(--text-tertiary);
 }
-.empty i {
-  font-size: 32px;
+.empty-state i {
+  font-size: 36px;
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  opacity: 0.5;
 }
-.empty p {
+.empty-state p {
   font-size: 14px;
-}
-.error-msg {
-  margin-top: 12px;
-  padding: 10px 14px;
-  background: rgba(255, 69, 58, 0.1);
-  border: 0.5px solid rgba(255, 69, 58, 0.3);
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  color: #ff453a;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 </style>
