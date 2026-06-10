@@ -77,6 +77,17 @@
             :is-first="idx === 0"
             :is-last="idx === resultData.scenes.length - 1"
           />
+          <!-- 生产视频 -->
+          <div class="arow" v-if="resultData.scenes.length">
+            <button class="btn" :disabled="videoLoading" @click="handleGenerateVideo">
+              <i class="ti ti-player" aria-hidden="true"></i>
+              {{ videoLoading ? 'AI 生成视频中...' : '生产视频' }}
+            </button>
+          </div>
+          <div v-if="videoUrl" class="video-wrap">
+            <video :src="videoUrl" controls autoplay class="gen-video"></video>
+          </div>
+          <div v-if="videoError" class="video-error">{{ videoError }}</div>
         </div>
 
         <!-- 剪映导入版 -->
@@ -100,7 +111,11 @@
               :sub="cover.sub"
               :tags="cover.tags"
               :is-dy="resultData.plat === 'dy'"
+              :generating="coverGenerations[idx].loading"
+              :image-url="coverGenerations[idx].imageUrl"
+              :image-error="coverGenerations[idx].error"
               @copy="cpText"
+              @generate-cover="handleGenerateCover(idx)"
             />
           </div>
           <p class="sec-lbl">更多封面文案备选</p>
@@ -123,8 +138,27 @@
         <div class="tp" :class="{ on: activeTab === 'ti' }">
           <p class="sec-lbl">标题备选</p>
           <div class="titem" v-for="(title, idx) in resultData.titles" :key="idx">
-            <span>{{ title }}</span>
-            <button class="tcopy" @click="cpText(title)">复制</button>
+            <div class="titem-row">
+              <span>{{ title }}</span>
+              <div class="titem-actions">
+                <button
+                  class="tcopy"
+                  :disabled="titleCoverStates[idx]?.loading"
+                  @click="handleTitleGenerateCover(idx, title)"
+                >
+                  {{ titleCoverStates[idx]?.loading ? '生成中...' : '生成封面' }}
+                </button>
+                <button class="tcopy" @click="cpText(title)">复制</button>
+              </div>
+            </div>
+            <!-- 生成的封面展示 -->
+            <div v-if="titleCoverStates[idx]?.imageUrl" class="title-cover-result">
+              <img :src="titleCoverStates[idx].imageUrl" alt="封面预览" class="title-cover-img" />
+              <button class="tcopy title-cover-dl" @click="downloadImage(titleCoverStates[idx].imageUrl, title)">
+                <i class="ti ti-download" aria-hidden="true"></i> 下载封面
+              </button>
+            </div>
+            <div v-if="titleCoverStates[idx]?.error" class="title-cover-error">{{ titleCoverStates[idx].error }}</div>
           </div>
         </div>
 
@@ -142,7 +176,8 @@
 </template>
 
 <script setup>
-import { computed, ref, nextTick, watch } from 'vue'
+import { computed, ref, reactive, nextTick, watch } from 'vue'
+import { generateCoverImage as agnesGenerateCover } from './services/media.js'
 import ScriptForm from './components/ScriptForm.vue'
 import StatsBar from './components/StatsBar.vue'
 import SceneBlock from './components/SceneBlock.vue'
@@ -158,6 +193,11 @@ const {
   storedApiKey, loadStoredKey,
   hasUrl, genWithAI, saveApiKey, switchTab,
   getJianyinText, getCopyText, enhanceScript,
+
+  // 媒体生成
+  videoLoading, videoUrl, videoError,
+  coverGenerations,
+  generateVideoFromScenes, generateCoverImage, getAgnesApiKey,
 } = useGenerator()
 
 const aiGenerated = ref(false)
@@ -219,6 +259,67 @@ async function cpText(text) {
     await navigator.clipboard.writeText(text)
   } catch {
     // 静默失败
+  }
+}
+
+/** 生产视频：从分镜脚本生成视频 */
+async function handleGenerateVideo() {
+  await generateVideoFromScenes(resultData.scenes)
+}
+
+/** 生成封面：为指定索引的封面卡片生成图片 */
+async function handleGenerateCover(idx) {
+  const cover = previewCovers.value[idx]
+  if (!cover) return
+  await generateCoverImage(cover.main + '\n' + cover.sub, idx)
+}
+
+/** 标题封面生成状态（按标题索引管理） */
+const titleCoverStates = reactive({})
+// 标题列表变化时清理已不存在的索引
+watch(() => resultData.titles, (titles) => {
+  for (const key in titleCoverStates) {
+    if (!titles[Number(key)]) delete titleCoverStates[key]
+  }
+})
+
+/** 为指定标题生成封面图片 */
+async function handleTitleGenerateCover(idx, title) {
+  const key = getAgnesApiKey()
+  if (!key) {
+    titleCoverStates[idx] = { loading: false, imageUrl: '', error: '请先配置 Agnes API Key' }
+    return
+  }
+  if (titleCoverStates[idx]?.loading) return
+
+  titleCoverStates[idx] = { loading: true, imageUrl: '', error: '' }
+
+  try {
+    // 用标题文本作为封面提示词，加上风格描述
+    const prompt = `封面标题：${title}\n风格：简洁大气，社交媒体封面，高清`
+    const url = await agnesGenerateCover({ prompt, apiKey: key })
+    titleCoverStates[idx] = { loading: false, imageUrl: url, error: '' }
+  } catch (e) {
+    titleCoverStates[idx] = { loading: false, imageUrl: '', error: e.message || '封面生成失败' }
+  }
+}
+
+/** 下载图片到本地 */
+async function downloadImage(url, filename) {
+  try {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = filename.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) + '.png'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(blobUrl)
+  } catch {
+    // 直接打开新标签页作为降级方案
+    window.open(url, '_blank')
   }
 }
 
@@ -388,11 +489,47 @@ async function cpText(text) {
   padding: 12px 14px;
   font-size: 14px;
   color: var(--text-primary);
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.titem-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 8px;
-  margin-bottom: 8px;
+}
+.titem-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* 标题生成的封面展示区域 */
+.title-cover-result {
+  margin-top: 8px;
+  border-top: 0.5px solid var(--border-secondary);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.title-cover-img {
+  width: 100%;
+  max-width: 320px;
+  border-radius: var(--radius-md);
+  display: block;
+}
+.title-cover-dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.title-cover-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #ff6b6b;
 }
 
 .htag {
@@ -441,6 +578,29 @@ async function cpText(text) {
 
 .enhance-actions .btn {
   min-width: 130px;
+}
+
+/* ---- 生产视频 ---- */
+.video-wrap {
+  margin-top: 12px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+}
+.gen-video {
+  width: 100%;
+  max-height: 480px;
+  display: block;
+  outline: none;
+}
+.video-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 77, 77, 0.12);
+  border: 0.5px solid rgba(255, 77, 77, 0.3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: #ff6b6b;
 }
 
 /* ---- 流式打字机面板 ---- */

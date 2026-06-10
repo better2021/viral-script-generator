@@ -1,7 +1,8 @@
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { HOOKS, MIDDLES, ENDINGS, TITLES, HASHTAGS, COVER_TEMPLATES, HINTS, HOOK_HINTS, ENDING_HINTS } from '../templates/index.js'
 import { callAI, callAIStream, buildPrompt } from '../services/ai.js'
 import { buildEnhancePrompt } from '../prompts/index.js'
+import { generateCoverImage as agnesGenerateCover, generateVideo as agnesGenerateVideo } from '../services/media.js'
 
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)]
@@ -336,6 +337,126 @@ export function useGenerator() {
     }
   }
 
+  // ==================== 媒体生成（视频 + 封面图片）====================
+
+  /** 视频生成状态 */
+  const videoLoading = ref(false)
+  const videoUrl = ref('')
+  const videoError = ref('')
+
+  /** 封面生成状态（每张预览卡片独立，固定 2 个条目） */
+  const coverGenerations = reactive([
+    { loading: false, imageUrl: '', error: '' },
+    { loading: false, imageUrl: '', error: '' },
+  ])
+
+  // 脚本重新生成时重置媒体状态
+  watch(() => resultData.covers, (newCovers) => {
+    if (newCovers.length) {
+      resetMediaStates()
+    }
+  })
+
+  /** 读取 Agnes 模型专属 API Key */
+  function getAgnesApiKey() {
+    const key = storedApiKey.value || apiKeyInput.value.trim()
+    if (key) return key
+    try {
+      return localStorage.getItem('viral_script_api_key_agnes') || ''
+    } catch {
+      return ''
+    }
+  }
+
+  /** 重置所有媒体生成状态 */
+  function resetMediaStates() {
+    videoLoading.value = false
+    videoUrl.value = ''
+    videoError.value = ''
+    coverGenerations[0] = { loading: false, imageUrl: '', error: '' }
+    coverGenerations[1] = { loading: false, imageUrl: '', error: '' }
+  }
+
+  /**
+   * 从分镜脚本生成视频
+   * @param {Array} scenes - 分镜数组 [{ i, text, hint }]
+   */
+  async function generateVideoFromScenes(scenes) {
+    if (!scenes || !scenes.length) {
+      videoError.value = '暂无分镜脚本，请先生成文案'
+      return false
+    }
+    if (videoLoading.value) return false
+
+    const key = getAgnesApiKey()
+    if (!key) {
+      videoError.value = '请先配置 Agnes API Key'
+      return false
+    }
+
+    // 将分镜拼接为视频提示词
+    const prompt = scenes.map(s => `镜头${s.i}：${s.text}`).join('\n') +
+      '\n\n风格：短视频，节奏明快，画面连贯'
+
+    videoLoading.value = true
+    videoUrl.value = ''
+    videoError.value = ''
+
+    try {
+      const url = await agnesGenerateVideo({
+        prompt,
+        apiKey: key,
+        onStatus: (status) => {
+          // 可通过回调更新轮询进度（暂不暴露给 UI）
+        },
+      })
+      videoUrl.value = url
+      return true
+    } catch (e) {
+      videoError.value = e.message || '视频生成失败'
+      return false
+    } finally {
+      videoLoading.value = false
+    }
+  }
+
+  /**
+   * 根据封面文案生成封面图片
+   * @param {string} text - 封面文案（main + sub）
+   * @param {number} index - coverGenerations 数组索引（0 或 1）
+   */
+  async function generateCoverImage(text, index) {
+    if (!text || !text.trim()) {
+      coverGenerations[index].error = '封面文案为空'
+      return false
+    }
+    if (coverGenerations[index].loading) return false
+
+    const key = getAgnesApiKey()
+    if (!key) {
+      coverGenerations[index].error = '请先配置 Agnes API Key'
+      return false
+    }
+
+    coverGenerations[index].loading = true
+    coverGenerations[index].imageUrl = ''
+    coverGenerations[index].error = ''
+
+    try {
+      const url = await agnesGenerateCover({
+        prompt: text,
+        apiKey: key,
+      })
+      coverGenerations[index].imageUrl = url
+      return true
+    } catch (e) {
+      coverGenerations[index].error = e.message || '封面图片生成失败'
+      return false
+    } finally {
+      coverGenerations[index].loading = false
+    }
+  }
+
   function getAiAnalyzePrompt() {
     const url = refUrl.value.trim()
     const t = topic.value.trim() || '我的主题'
@@ -383,5 +504,17 @@ export function useGenerator() {
     getCopyText,
     enhanceScript,
     getAiAnalyzePrompt,
+
+    // 媒体生成状态
+    videoLoading,
+    videoUrl,
+    videoError,
+    coverGenerations,
+
+    // 媒体生成方法
+    generateVideoFromScenes,
+    generateCoverImage,
+    getAgnesApiKey,
+    resetMediaStates,
   }
 }
